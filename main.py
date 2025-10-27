@@ -1,9 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
 from database import engine, get_db
-from user_management.models import models
-from user_management.models.user import RegisterRequest, LoginRequest, RegisterResponse, LoginResponse, ProfileResponse, LeaderboardResponse
+from models import models
+from models.user import (
+    RegisterRequest,
+    LoginRequest,
+    RegisterResponse,
+    LoginResponse,
+    ProfileResponse,
+    LeaderboardResponse,
+)
 
 app = FastAPI(title="Civic User Management Service", version="1.0.0")
 
