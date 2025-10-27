@@ -2,8 +2,10 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import engine, get_db
+from fastapi.security import OAuth2PasswordBearer
 from user_management.models import models
 from user_management.models.user import RegisterRequest, LoginRequest, RegisterResponse, LoginResponse, ProfileResponse, LeaderboardResponse
+from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 
 app = FastAPI(title="Civic User Management Service", version="1.0.0")
 
@@ -51,44 +53,83 @@ def readiness_check(db: Session = Depends(get_db)):
 # -------------------------------------------------------
 # 🧍 USER & AUTHENTICATION ENDPOINTS
 # -------------------------------------------------------
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login")
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = decode_access_token(token)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    
+    user = db.query(models.User).filter(models.User.user_id == payload.get("user_id")).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
 
 @app.post("/api/v1/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
 def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
-    """
-    Creates a new user.
-    Body: { "name": "...", "email": "...", "password": "...", "role": "Citizen" }
-    Response (201): { "user_id": 123, "name": "...", "email": "...", "token": "..." }
-    """
-    pass
+    existing_user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+    hashed_pw = hash_password(payload.password)
+    new_user = models.User(
+        name=payload.name,
+        email=payload.email,
+        password=hashed_pw,
+        role=payload.role
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token = create_access_token({"user_id": new_user.user_id, "email": new_user.email})
+
+    return RegisterResponse(
+        user_id=new_user.user_id,
+        name=new_user.name,
+        email=new_user.email,
+        token=token
+    )
 
 
 @app.post("/api/v1/login", response_model=LoginResponse)
 def login_user(payload: LoginRequest, db: Session = Depends(get_db)):
-    """
-    Authenticates a user and returns a token.
-    Body: { "email": "...", "password": "..." }
-    Response (200): { "user_id": 123, "name": "...", "role": "...", "token": "..." }
-    """
-    pass
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    token = create_access_token({"user_id": user.user_id, "email": user.email})
+
+    return LoginResponse(
+        user_id=user.user_id,
+        name=user.name,
+        role=user.role,
+        token=token
+    )
 
 
 @app.get("/api/v1/profile/me", response_model=ProfileResponse)
-def get_profile(db: Session = Depends(get_db)):
-    """
-    Gets the profile of the currently authenticated user.
-    Auth: Requires authentication token.
-    Response (200): { "user_id": 123, "name": "...", "email": "...", "total_points": 150, "spendable_points": 120 }
-    """
-    pass
+def get_profile(current_user: models.User = Depends(get_current_user)):
+    return ProfileResponse(
+        user_id=current_user.user_id,
+        name=current_user.name,
+        email=current_user.email,
+        total_points=current_user.total_points,
+        spendable_points=current_user.spendable_points
+    )
 
 
 @app.get("/api/v1/leaderboard", response_model=LeaderboardResponse)
 def get_leaderboard(db: Session = Depends(get_db)):
-    """
-    Gets the public leaderboard, ranked by total_points.
-    Response (200): { "leaderboard": [ { "rank": 1, "name": "User A", "total_points": 150 }, ... ] }
-    """
-    pass
+    users = db.query(models.User).order_by(models.User.total_points.desc()).limit(10).all()
+
+    leaderboard = []
+    rank = 1
+    for u in users:
+        leaderboard.append({"rank": rank, "name": u.name, "total_points": u.total_points})
+        rank += 1
+    return LeaderboardResponse(leaderboard=leaderboard)
 
 
 # -------------------------------------------------------
