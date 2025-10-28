@@ -3,16 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import engine, get_db
 from fastapi.security import OAuth2PasswordBearer
-from database import engine, get_db
-from models import models
-from models.user import (
-    RegisterRequest,
-    LoginRequest,
-    RegisterResponse,
-    LoginResponse,
-    ProfileResponse,
-    LeaderboardResponse,
-)
+from user_management.models import models
+from user_management.models.user import RegisterRequest, LoginRequest, RegisterResponse, LoginResponse, ProfileResponse, LeaderboardResponse
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 
 app = FastAPI(title="Civic User Management Service", version="1.0.0")
@@ -84,7 +76,7 @@ def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
     new_user = models.User(
         name=payload.name,
         email=payload.email,
-        password_hash=hashed_pw,
+        password=hashed_pw,
         role=payload.role
     )
     db.add(new_user)
@@ -97,7 +89,6 @@ def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
         user_id=new_user.user_id,
         name=new_user.name,
         email=new_user.email,
-        role=new_user.role,
         token=token
     )
 
@@ -105,7 +96,7 @@ def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
 @app.post("/api/v1/login", response_model=LoginResponse)
 def login_user(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user or not verify_password(payload.password, user.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     token = create_access_token({"user_id": user.user_id, "email": user.email})
@@ -113,7 +104,6 @@ def login_user(payload: LoginRequest, db: Session = Depends(get_db)):
     return LoginResponse(
         user_id=user.user_id,
         name=user.name,
-        email=user.email,
         role=user.role,
         token=token
     )
