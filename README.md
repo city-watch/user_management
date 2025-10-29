@@ -49,5 +49,5 @@ Your database is ready and your app is configured. Now, run the FastAPI server:
 
 ```python
 # This will start the server, which will reload automatically when you save code
-fastapi run user_management/main.py --reload --port {port} 
+fastapi run main.py --reload --port {port} 
 ```
