@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, TIMESTAMP
+from sqlalchemy import Column, Integer, String, TIMESTAMP
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import List, Optional
+from enum import Enum
 
 
 # -------------------------------
@@ -28,6 +29,13 @@ class User(Base):
 # Pydantic Schemas (for FastAPI)
 # -------------------------------
 
+# -------- Enums --------
+class EventType(str, Enum):
+    NEW_REPORT = "new_report"
+    CONFIRM_ISSUE = "confirm_issue"
+    REPORT_RESOLVED = "report_resolved"
+
+
 # -------- Requests --------
 class RegisterRequest(BaseModel):
     name: str
@@ -41,6 +49,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class InternalEventRequest(BaseModel):
+    user_id: int
+    event_type: EventType
+
+
 # -------- Responses --------
 class UserBase(BaseModel):
     user_id: int
@@ -48,8 +61,8 @@ class UserBase(BaseModel):
     email: EmailStr
     role: Optional[str] = "Citizen"
 
-    class Config:
-        orm_mode = True
+    # Pydantic V2 Config
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RegisterResponse(UserBase):
@@ -67,8 +80,8 @@ class ProfileResponse(BaseModel):
     total_points: int
     spendable_points: int
 
-    class Config:
-        orm_mode = True
+    # Pydantic V2 Config
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LeaderboardEntry(BaseModel):
@@ -79,3 +92,10 @@ class LeaderboardEntry(BaseModel):
 
 class LeaderboardResponse(BaseModel):
     leaderboard: List[LeaderboardEntry]
+
+
+class InternalEventResponse(BaseModel):
+    message: str
+    user_id: int
+    points_added: int
+    new_total: int
