@@ -140,7 +140,8 @@ def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({
         "user_id": new_user.user_id,
-        "email": new_user.email
+        "email": new_user.email,
+        "role": new_user.role
     })
 
     return RegisterResponse(
@@ -167,7 +168,8 @@ def login_user(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({
         "user_id": user.user_id,
-        "email": user.email
+        "email": user.email,
+        "role": user.role
     })
 
     return LoginResponse(
